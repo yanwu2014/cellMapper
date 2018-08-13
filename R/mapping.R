@@ -17,7 +17,7 @@ fast_pca <- function(x, pcs.use) {
 
   var.exp <- pca.obj$d
   pc.emb <- t(pca.obj$u); colnames(pc.emb) <- rownames(x);
-  pc.load <- pca.obj$v; rownames(pc.load) <- genes.use;
+  pc.load <- pca.obj$v; rownames(pc.load) <- colnames(x);
   names(var.exp) <- rownames(pc.emb) <- colnames(pc.load) <- paste("PC", 1:pcs.use)
 
   return(list(pc.load = pc.load, pc.emb = pc.emb))
@@ -57,8 +57,9 @@ project_pca <- function(newx, pc.load) {
 #' @export
 #'
 TrainKNN <- function(norm.counts, genes.use, ident, pcs.use = 40) {
-  pca <- fast_pca(norm.counts[genes.use,], pcs.use = pcs.use)
-  list(norm.counts = norm.counts[genes.use,], ident = ident,
+  norm.counts <- norm.counts[genes.use,]
+  pca <- fast_pca(norm.counts, pcs.use = pcs.use)
+  list(norm.counts = norm.counts, ident = ident,
        pc.emb = pca$pc.emb, pc.load = pca$pc.load)
 }
 
@@ -92,13 +93,17 @@ MapKNN <- function(query.norm.counts, train.knn, genes.use = NULL, use.pca = T, 
   ident <- as.character(train.knn$ident)
   unique.ident <- unique(ident)
 
-  cell.mapped.ident <- apply(knn.res$nn.index, 1, function(x) {
+  cell.mapped.ident <- sapply(1:nrow(knn.res$nn.index), function(i) {
+    x <- knn.res$nn.index[i,]
+    d <- 1/knn.res$nn.dist[i,]
+    ident.tbl <- tapply(d, factor(ident[x]), sum)
+
     ident.counts <- vector(mode = "integer", length = length(unique.ident))
     names(ident.counts) <- unique.ident
-
-    ident.tbl <- table(ident[x])
     ident.counts[names(ident.tbl)] <- ident.tbl
-    ident.counts/k
+
+    ident.counts <- ident.counts/sum(ident.counts)
+    return(ident.counts)
   })
   colnames(cell.mapped.ident) <- colnames(query.norm.counts)
 
