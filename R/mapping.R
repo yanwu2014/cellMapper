@@ -43,6 +43,31 @@ project_pca <- function(newx, pc.load) {
 }
 
 
+#' Compute distance weighted voting scores for each reference class for each cell
+#'
+#' @param knn.res List of neighbors and distances, list output of FNN::get.knnx
+#' @param ident Reference identity
+#'
+#' @return Reference classes by cells matrix of voting scores
+#'
+weighted_neighbor_voting <- function(knn.res, ident) {
+  unique.ident <- unique(ident)
+
+  sapply(1:nrow(knn.res$nn.index), function(i) {
+    x <- knn.res$nn.index[i,]
+    d <- 1/knn.res$nn.dist[i,]
+    ident.tbl <- tapply(d, factor(ident[x]), sum)
+
+    ident.counts <- vector(mode = "integer", length = length(unique.ident))
+    names(ident.counts) <- unique.ident
+    ident.counts[names(ident.tbl)] <- ident.tbl
+
+    ident.counts <- ident.counts/sum(ident.counts)
+    return(ident.counts)
+  })
+}
+
+
 #' Runs PCA on the training dataset
 #'
 #' @param norm.counts Normalized gene expression matrix, should be genes x samples
@@ -91,20 +116,7 @@ MapKNN <- function(query.norm.counts, train.knn, genes.use = NULL, use.pca = T, 
   }
 
   ident <- as.character(train.knn$ident)
-  unique.ident <- unique(ident)
-
-  cell.mapped.ident <- sapply(1:nrow(knn.res$nn.index), function(i) {
-    x <- knn.res$nn.index[i,]
-    d <- 1/knn.res$nn.dist[i,]
-    ident.tbl <- tapply(d, factor(ident[x]), sum)
-
-    ident.counts <- vector(mode = "integer", length = length(unique.ident))
-    names(ident.counts) <- unique.ident
-    ident.counts[names(ident.tbl)] <- ident.tbl
-
-    ident.counts <- ident.counts/sum(ident.counts)
-    return(ident.counts)
-  })
+  cell.mapped.ident <- weighted_neighbor_voting(knn.res, ident)
   colnames(cell.mapped.ident) <- colnames(query.norm.counts)
 
   return(cell.mapped.ident)
@@ -152,6 +164,65 @@ SummarizeKNN <- function(cell.mapped.ident, query.ident, ident.thresh = 0, assig
 }
 
 SummarizeKNN <- compiler::cmpfun(SummarizeKNN)
+
+
+#' Cross validation to find the optimal k
+#'
+#' @param train.knn List output of TrainKNN with gene expression matrix, PCs, and reference ident
+#' @param k.range Range of k values to test
+#' @param n.folds Number of folds to split the data
+#' @param seed Random seed for splitting folds
+#' @param n.cores Number of multithreading cores
+#'
+#' @return List of k value accuracies and the optimal k
+#'
+#' @import caret
+#' @import snow
+#' @export
+#'
+CrossValidateKNN <- function(train.knn, k.range, n.folds = 4, seed = NULL, n.cores = 4) {
+  ident <- as.character(train.knn$ident); names(ident) <- names(train.knn$ident);
+  cell.names <- names(ident)
+
+  if (!is.null(seed)) set.seed(seed)
+  test.folds <- caret::createFolds(ident, k = n.folds, list = T, returnTrain = F)
+
+  test.folds <- lapply(test.folds, function(idx) cell.names[idx])
+  train.folds <- lapply(test.folds, function(test.cells) cell.names[!cell.names %in% test.cells])
+
+  knn.folds <- lapply(1:n.folds, function(i) {
+    test.cells <- test.folds[[i]]
+    train.cells <- train.folds[[i]]
+
+    pc.train <- fast_pca(train.knn$norm.counts[rownames(train.knn$pc.load), train.cells],
+                         pcs.use = nrow(train.knn$pc.emb))
+    pc.train.emb <- pc.train$pc.emb
+    pc.test.emb <- project_pca(train.knn$norm.counts[rownames(train.knn$pc.load), test.cells],
+                               pc.train$pc.load)
+
+    list(pc.train = pc.train.emb, pc.test = pc.test.emb)
+  })
+
+  cl <- snow::makeCluster(n.cores, type = "SOCK")
+  snow::clusterExport(cl, c("knn.folds", "ident"), envir = environment())
+  k.acc <- snow::parSapply(cl, k.range, function(k) {
+    fold.acc <- sapply(knn.folds, function(fld) {
+      train.ident <- ident[colnames(fld$pc.train)]
+      test.ident <- ident[colnames(fld$pc.test)]
+
+      knn.res <- FNN::get.knnx(t(fld$pc.train), t(fld$pc.test), k = k)
+      classes <- apply(weighted_neighbor_voting(knn.res, train.ident), 2, function(x) names(x)[which.max(x)])
+      sum(classes == test.ident)/length(classes)
+    })
+    mean(fold.acc)
+  })
+  snow::stopCluster(cl)
+
+  best.idx <- which.max(k.acc)
+  return(list(acc = k.acc, k = k.range[[best.idx]]))
+}
+
+CrossValidateKNN <- compiler::cmpfun(CrossValidateKNN)
 
 
 #' Map mouse genes to human genes
