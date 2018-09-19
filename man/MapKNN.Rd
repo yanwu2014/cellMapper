@@ -14,6 +14,8 @@ MapKNN(query.norm.counts, train.knn, genes.use = NULL, use.pca = T,
 
 \item{genes.use}{Genes to use for classification}
 
+\item{use.pca}{Whether or not to project to PCs first}
+
 \item{k}{Number of neighbors}
 }
 \value{

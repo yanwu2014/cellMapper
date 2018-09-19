@@ -68,6 +68,36 @@ weighted_neighbor_voting <- function(knn.res, ident) {
 }
 
 
+#' Pairwise correlation of the columns of two matrices
+#'
+#' @param data.1 First input matrix
+#' @param data.2 Second input matrix
+#' @param metric Metric to use (either pearson or cosine)
+#'
+#' @return Matrix of column to column correlations
+#'
+correlate_cols <- function(data.1, data.2, metric = "pearson") {
+  cor.matrix <- matrix(0, ncol(data.1), ncol(data.2))
+  rownames(cor.matrix) <- colnames(data.1)
+  colnames(cor.matrix) <- colnames(data.2)
+
+  for(i in 1:ncol(data.1)) {
+    for(j in 1:ncol(data.2)) {
+      if (metric == "pearson") {
+        cor.matrix[i,j] <- cor(data.1[,i],data.2[,j])
+      } else if (metric == "cosine") {
+        cor.matrix[i,j] <- lsa::cosine(data.1[,i],data.2[,j])
+      }
+    }
+  }
+
+  cor.matrix
+}
+
+correlate_cols <- compiler::cmpfun(correlate_cols)
+
+
+
 #' Runs PCA on the training dataset
 #'
 #' @param norm.counts Normalized gene expression matrix, should be genes x samples
@@ -89,11 +119,50 @@ TrainKNN <- function(norm.counts, genes.use, ident, pcs.use = 40) {
 }
 
 
+#' Maps query clusters to reference clusters using correlation
+#'
+#' @param query.norm.counts Query gene expression matrix
+#' @param query.clusters Factor of query clusters
+#' @param train.knn Output of TrainKNN
+#' @param genes.use Genes to use for classification
+#' @param use.pca Whether or not to project to PCs first
+#' @param metric Metric to use (either pearson or cosine)
+#'
+#' @return Matrix of query to reference cluster correlations
+#'
+#' @import compiler
+#' @export
+#'
+MapClustersCor <- function(query.norm.counts, query.clusters, train.knn, genes.use = NULL,
+                           use.pca = T, metric = "pearson") {
+  stopifnot(metric %in% c("pearson", "cosine"))
+  if (is.null(genes.use)) genes.use <- rownames(query.norm.counts)
+
+  if (use.pca) {
+    genes.use <- intersect(genes.use, rownames(train.knn$pc.load))
+    query.pc.emb <- cellMapper:::project_pca(query.norm.counts[genes.use,], train.knn$pc.load)
+
+    query.data <- t(apply(query.pc.emb, 1, function(x) tapply(x, query.clusters, mean)))
+    ref.data <- t(apply(train.knn$pc.emb, 1, function(x) tapply(x, train.knn$ident, mean)))
+  } else {
+    genes.use <- intersect(genes.use, rownames(train.knn$norm.counts))
+    query.data <- t(apply(query.norm.counts[genes.use,], 1, function(x) tapply(x, query.clusters, mean)))
+    ref.data <- t(apply(train.knn$norm.counts[genes.use,], 1, function(x) tapply(x, train.knn$ident, mean)))
+  }
+
+  correlate_cols(query.data, ref.data, metric = metric)
+}
+
+MapClustersCor <- compiler::cmpfun(MapClustersCor)
+
+
+
 #' Map cells to a reference dataset using a kNN classifier
 #'
 #' @param query.norm.counts Query gene expression matrix
 #' @param train.knn Output of TrainKNN
 #' @param genes.use Genes to use for classification
+#' @param use.pca Whether or not to project to PCs first
 #' @param k Number of neighbors
 #'
 #' @return Matrix of cell type probabilities
