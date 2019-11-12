@@ -128,7 +128,7 @@ TrainKNN <- function(norm.counts, genes.use, ident, pcs.use = 40) {
 #' @param genes.use Genes to use for classification
 #' @param metric Metric to use (either pearson or cosine)
 #'
-#' @return Matrix of query to reference cluster correlations
+#' @return List of reference and query cluster means and cluster correlations
 #'
 #' @import compiler
 #' @export
@@ -141,8 +141,9 @@ MapClustersCor <- function(query.data, query.clusters, train.data, train.cluster
 
   query.cluster.data <- t(apply(query.data[genes.use,], 1, function(x) tapply(x, query.clusters, mean)))
   ref.cluster.data <- t(apply(train.data[genes.use,], 1, function(x) tapply(x, train.clusters, mean)))
+  cluster.correlations <- correlate_cols(query.cluster.data, ref.cluster.data, metric = metric)
 
-  correlate_cols(query.cluster.data, ref.cluster.data, metric = metric)
+  return(list(query.cluster.data, ref.cluster.data, cluster.correlations))
 }
 
 MapClustersCor <- compiler::cmpfun(MapClustersCor)

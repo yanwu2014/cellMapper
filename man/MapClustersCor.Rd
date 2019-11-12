@@ -21,7 +21,7 @@ MapClustersCor(query.data, query.clusters, train.data, train.clusters,
 \item{metric}{Metric to use (either pearson or cosine)}
 }
 \value{
-Matrix of query to reference cluster correlations
+List of reference and query cluster means and cluster correlations
 }
 \description{
 Maps query clusters to reference clusters using correlation
