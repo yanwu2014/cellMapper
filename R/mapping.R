@@ -121,11 +121,11 @@ TrainKNN <- function(norm.counts, genes.use, ident, pcs.use = 40) {
 
 #' Maps query clusters to reference clusters using correlation
 #'
-#' @param query.norm.counts Query gene expression matrix
+#' @param query.data Query gene expression matrix
 #' @param query.clusters Factor of query clusters
-#' @param train.knn Output of TrainKNN
+#' @param train.data Reference gene expression matrix
+#' @param train.clusters Factor of reference clusters
 #' @param genes.use Genes to use for classification
-#' @param use.pca Whether or not to project to PCs first
 #' @param metric Metric to use (either pearson or cosine)
 #'
 #' @return Matrix of query to reference cluster correlations
@@ -133,27 +133,20 @@ TrainKNN <- function(norm.counts, genes.use, ident, pcs.use = 40) {
 #' @import compiler
 #' @export
 #'
-MapClustersCor <- function(query.norm.counts, query.clusters, train.knn, genes.use = NULL,
-                           use.pca = T, metric = "pearson") {
+MapClustersCor <- function(query.data, query.clusters, train.data, train.clusters,
+                           genes.use = NULL, metric = "pearson") {
   stopifnot(metric %in% c("pearson", "cosine"))
-  if (is.null(genes.use)) genes.use <- rownames(query.norm.counts)
+  if (is.null(genes.use)) genes.use <- intersect(rownames(train.data), rownames(query.data))
+  else genes.use <- genes.use[genes.use %in% rownames(query.data) & genes.use %in% rownames(train.data)]
 
-  if (use.pca) {
-    genes.use <- intersect(genes.use, rownames(train.knn$pc.load))
-    query.pc.emb <- cellMapper:::project_pca(query.norm.counts[genes.use,], train.knn$pc.load)
+  query.cluster.data <- t(apply(query.data[genes.use,], 1, function(x) tapply(x, query.clusters, mean)))
+  ref.cluster.data <- t(apply(train.data[genes.use,], 1, function(x) tapply(x, train.clusters, mean)))
 
-    query.data <- t(apply(query.pc.emb, 1, function(x) tapply(x, query.clusters, mean)))
-    ref.data <- t(apply(train.knn$pc.emb, 1, function(x) tapply(x, train.knn$ident, mean)))
-  } else {
-    genes.use <- intersect(genes.use, rownames(train.knn$norm.counts))
-    query.data <- t(apply(query.norm.counts[genes.use,], 1, function(x) tapply(x, query.clusters, mean)))
-    ref.data <- t(apply(train.knn$norm.counts[genes.use,], 1, function(x) tapply(x, train.knn$ident, mean)))
-  }
-
-  correlate_cols(query.data, ref.data, metric = metric)
+  correlate_cols(query.cluster.data, ref.cluster.data, metric = metric)
 }
 
 MapClustersCor <- compiler::cmpfun(MapClustersCor)
+
 
 
 

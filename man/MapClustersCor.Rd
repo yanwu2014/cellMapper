@@ -4,19 +4,19 @@
 \alias{MapClustersCor}
 \title{Maps query clusters to reference clusters using correlation}
 \usage{
-MapClustersCor(query.norm.counts, query.clusters, train.knn,
-  genes.use = NULL, use.pca = T, metric = "pearson")
+MapClustersCor(query.data, query.clusters, train.data, train.clusters,
+  genes.use = NULL, metric = "pearson")
 }
 \arguments{
-\item{query.norm.counts}{Query gene expression matrix}
+\item{query.data}{Query gene expression matrix}
 
 \item{query.clusters}{Factor of query clusters}
 
-\item{train.knn}{Output of TrainKNN}
+\item{train.data}{Reference gene expression matrix}
+
+\item{train.clusters}{Factor of reference clusters}
 
 \item{genes.use}{Genes to use for classification}
-
-\item{use.pca}{Whether or not to project to PCs first}
 
 \item{metric}{Metric to use (either pearson or cosine)}
 }
