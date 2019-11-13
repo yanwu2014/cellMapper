@@ -77,7 +77,7 @@ weighted_neighbor_voting <- function(knn.res, ident) {
 #' @return Matrix of column to column correlations
 #'
 correlate_cols <- function(data.1, data.2, metric = "pearson") {
-  sapply(1:ncol(data.1), function(i) {
+  cor.mat <- sapply(1:ncol(data.1), function(i) {
     sapply(1:ncol(data.2), function(j) {
       if (metric == "pearson") {
         cor(data.1[,i],data.2[,j])
@@ -86,6 +86,10 @@ correlate_cols <- function(data.1, data.2, metric = "pearson") {
       }
     })
   })
+  colnames(cor.mat) <- colnames(data.1)
+  rownames(cor.mat) <- colnames(data.2)
+
+  return(cor.mat)
 }
 
 correlate_cols <- compiler::cmpfun(correlate_cols)
