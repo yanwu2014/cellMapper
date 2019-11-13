@@ -77,21 +77,15 @@ weighted_neighbor_voting <- function(knn.res, ident) {
 #' @return Matrix of column to column correlations
 #'
 correlate_cols <- function(data.1, data.2, metric = "pearson") {
-  cor.matrix <- matrix(0, ncol(data.1), ncol(data.2))
-  rownames(cor.matrix) <- colnames(data.1)
-  colnames(cor.matrix) <- colnames(data.2)
-
-  for(i in 1:ncol(data.1)) {
-    for(j in 1:ncol(data.2)) {
+  cor.matrix <- sapply(1:ncol(data.1), function(i) {
+    sapply(1:ncol(data.2), function(j) {
       if (metric == "pearson") {
         cor.matrix[i,j] <- cor(data.1[,i],data.2[,j])
       } else if (metric == "cosine") {
         cor.matrix[i,j] <- lsa::cosine(data.1[,i],data.2[,j])
       }
-    }
-  }
-
-  cor.matrix
+    })
+  })
 }
 
 correlate_cols <- compiler::cmpfun(correlate_cols)
@@ -143,7 +137,9 @@ MapClustersCor <- function(query.data, query.clusters, train.data, train.cluster
   ref.cluster.data <- t(apply(train.data[genes.use,], 1, function(x) tapply(x, train.clusters, mean)))
   cluster.correlations <- correlate_cols(query.cluster.data, ref.cluster.data, metric = metric)
 
-  return(list(query.cluster.data, ref.cluster.data, cluster.correlations))
+  return(list(query.cluster.data = query.cluster.data,
+              ref.cluster.data = ref.cluster.data,
+              cluster.correlations = cluster.correlations))
 }
 
 MapClustersCor <- compiler::cmpfun(MapClustersCor)
