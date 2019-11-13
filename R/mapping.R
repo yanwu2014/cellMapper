@@ -77,12 +77,12 @@ weighted_neighbor_voting <- function(knn.res, ident) {
 #' @return Matrix of column to column correlations
 #'
 correlate_cols <- function(data.1, data.2, metric = "pearson") {
-  cor.matrix <- sapply(1:ncol(data.1), function(i) {
+  sapply(1:ncol(data.1), function(i) {
     sapply(1:ncol(data.2), function(j) {
       if (metric == "pearson") {
-        cor.matrix[i,j] <- cor(data.1[,i],data.2[,j])
+        cor(data.1[,i],data.2[,j])
       } else if (metric == "cosine") {
-        cor.matrix[i,j] <- lsa::cosine(data.1[,i],data.2[,j])
+        lsa::cosine(data.1[,i],data.2[,j])
       }
     })
   })
